@@ -12,14 +12,16 @@ class StepAnalyzer:
 
     def raw_plot(self,
                  data,
+                 name: str = 'default',
                  save_data: bool = False):
         y_data = np.array(data)
         y_data.astype(np.float64)
         x_data = np.arange(0.0, len(y_data))
         fig = plt.figure()
         plt.plot(x_data, y_data)
+        plt.title(name)
         if save_data:
-            self.save_plot_to_format(name='kek')
+            self.save_plot_to_format(name=name)
         plt.show()
 
     def print_data(self, key_for_print):
