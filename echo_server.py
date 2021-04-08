@@ -1,5 +1,6 @@
 import json
-import socketserver
+import csv
+import pandas as pd
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import logging
 from typing import Tuple
@@ -31,6 +32,17 @@ class S(BaseHTTPRequestHandler):
         post_data = self.rfile.read(content_length)  # <--- Gets the data itself
         logging.info("POST request,\nPath: %s\nHeaders:\n%s\n\nBody:\n%s\n",
                      str(self.path), str(self.headers), post_data.decode('utf-8'))
+        json_post = json.loads(post_data)  # type: dict
+        for key, value in json_post.items():
+            with open("{}.csv".format(key), "a+", newline="") as outfile:
+                writer = csv.DictWriter(outfile,
+                                        fieldnames=list(value.keys()),
+                                        delimiter=',',
+                                        quotechar='|',
+                                        quoting=csv.QUOTE_MINIMAL
+                                        )
+                # writer.writeheader()
+                writer.writerow(value)
 
         self._set_response()
         if self._use_text:
