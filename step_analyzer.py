@@ -3,6 +3,7 @@ from typing import Dict
 import os
 import matplotlib.pyplot as plt
 import numpy as np
+import pykalman
 
 
 class StepAnalyzer:
@@ -10,14 +11,13 @@ class StepAnalyzer:
     def __init__(self, csv_data_path: str):
         self.dict_data = self.read_data(csv_data_path=csv_data_path)
 
-    def raw_plot(self,
-                 data,
-                 name: str = 'default',
-                 save_data: bool = False):
+    def draw_plot(self,
+                  data,
+                  name: str = 'default',
+                  save_data: bool = False):
         y_data = np.array(data)
         y_data.astype(np.float64)
         x_data = np.arange(0.0, len(y_data))
-        fig = plt.figure()
         plt.plot(x_data, y_data)
         plt.title(name)
         if save_data:
@@ -54,7 +54,7 @@ class StepAnalyzer:
         pwd = os.getcwd()
         path = './pictures/'
         os.chdir(path)
-        plt.savefig("{}.{}".format(name, fmt), fmt=fmt)
+        plt.savefig("{}.{}".format(name, fmt))
         os.chdir(pwd)
 
     @staticmethod
@@ -85,13 +85,9 @@ class StepAnalyzer:
 if __name__ == '__main__':
 
     accel = StepAnalyzer('BMI120 Accelerometer.csv')
-    print(accel.list_headers)
-    accel.raw_plot(data=accel.dict_data['rawX'])
-    for key in accel.list_headers:
-        print(len(accel.dict_data[key]))
-    dict_ = StepAnalyzer.read_data('BMI120 Accelerometer.csv')
-    from datetime import datetime
+    for key in accel.dict_data.keys():
+        if not key == 'time':
+            accel.draw_plot(data=accel.dict_data[key],
+                            save_data=True,
+                            name=key)
 
-    list_time = []
-    for time in dict_['time']:
-        list_time.append(datetime.strptime(time, "%H:%M:%S.%f"))
