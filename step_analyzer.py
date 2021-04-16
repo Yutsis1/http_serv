@@ -3,22 +3,34 @@ from typing import Dict
 import os
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
+
 import pykalman
 
 
 class StepAnalyzer:
 
     def __init__(self, csv_data_path: str):
-        self.dict_data = self.read_data(csv_data_path=csv_data_path)
+        self.df_data = self.read_data(csv_data_path=csv_data_path)
 
     def draw_plot(self,
-                  data,
+                  y_data,
+                  x_data=None,
                   name: str = 'default',
-                  save_data: bool = False):
-        y_data = np.array(data)
+                  x_label: str = 'X',
+                  y_label: str = 'Y',
+                  enable_grid=False,
+                  save_data: bool = False,
+                  *args):
+        y_data = np.array(y_data)
         y_data.astype(np.float64)
-        x_data = np.arange(0.0, len(y_data))
-        plt.plot(x_data, y_data)
+        x_data = x_data or np.arange(0.0, len(y_data))
+        # set XY labels
+        plt.xlabel(x_label)
+        plt.ylabel(y_label)
+        if enable_grid:
+            plt.grid()
+        plt.plot(x_data, y_data, args)
         plt.title(name)
         if save_data:
             self.save_plot_to_format(name=name)
@@ -30,7 +42,7 @@ class StepAnalyzer:
         :param key_for_print: the key which data should be printed
         :return:
         """
-        print(self.dict_data[key_for_print])
+        print(self.df_data[key_for_print])
 
     @property
     def list_headers(self):
@@ -39,7 +51,7 @@ class StepAnalyzer:
         :return: list of keys of self.dict_data
         """
         list_headers = []
-        for key in self.dict_data.keys():
+        for key in self.df_data.keys():
             list_headers.append(key)
         return list_headers
 
@@ -59,35 +71,36 @@ class StepAnalyzer:
 
     @staticmethod
     def read_data(csv_data_path: str,
-                  print_data: bool = False) -> Dict[str, list]:
+                  print_data: bool = False) -> pd.DataFrame:
         """
-        Method for read data and sort it to dict.
-        It method used instead of DictReader due to in file the data isn't sorted
+        Method for read data and sort it to pandas.DataFrame.
         :param csv_data_path: path to csv file
         :param print_data: debug option flag
         :return:
         """
-        with open(csv_data_path, newline='') as f:
-            csv_reader = csv.reader(f)
-            import operator
-            sorted_data = sorted(csv_reader, key=operator.itemgetter(3), reverse=False)
-            dict_data = dict.fromkeys(sorted_data[-1])
 
-            for key, i in zip(dict_data.keys(), range(len(sorted_data[-1]))):
-                dict_data[key] = []
-                for val in sorted_data[:-1]:
-                    dict_data[key].append(val[i])
+        def check_debug_option(print_option):
             if print_data:
-                print(dict_data)
-            return dict_data
+                print(print_option)
+
+        with open(csv_data_path, newline='') as f:
+
+            df = pd.read_csv(csv_data_path)
+            check_debug_option(df)
+
+            # reorder
+            df = df.sort_values(by=['time'])
+            check_debug_option(df)
+
+            return df
 
 
 if __name__ == '__main__':
 
     accel = StepAnalyzer('BMI120 Accelerometer.csv')
-    for key in accel.dict_data.keys():
+    # accel.read_data('BMI120 Accelerometer.csv', print_data=True)
+    for key in accel.df_data.keys():
         if not key == 'time':
-            accel.draw_plot(data=accel.dict_data[key],
+            accel.draw_plot(y_data=accel.df_data[key],
                             save_data=True,
                             name=key)
-
