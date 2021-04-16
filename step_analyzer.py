@@ -5,13 +5,19 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-import pykalman
+from pykalman import KalmanFilter
 
 
 class StepAnalyzer:
 
     def __init__(self, csv_data_path: str):
         self.df_data = self.read_data(csv_data_path=csv_data_path)
+        self.data_name = csv_data_path.split('.')[0]
+
+
+
+    def set_kalman(self):
+        pass
 
     def draw_plot(self, y_data, x_data=None,
                   name: str = 'default',
@@ -94,7 +100,6 @@ class StepAnalyzer:
                 print(print_option)
 
         with open(csv_data_path, newline='') as f:
-
             df = pd.read_csv(csv_data_path)
             check_debug_option(df)
 
@@ -107,10 +112,16 @@ class StepAnalyzer:
 
 if __name__ == '__main__':
 
+    def make_raw_plots(step_analyzer):
+        for key in step_analyzer.df_data.keys():
+            if not key == 'time':
+                step_analyzer.draw_plot(y_data=step_analyzer.df_data[key],
+                                        save_data=True,
+                                        name=key + ' ' + step_analyzer.data_name,
+                                        y_label='Y, m/s',
+                                        x_label='X, iter')
+
     accel = StepAnalyzer('BMI120 Accelerometer.csv')
-    # accel.read_data('BMI120 Accelerometer.csv', print_data=True)
-    for key in accel.df_data.keys():
-        if not key == 'time':
-            accel.draw_plot(y_data=accel.df_data[key],
-                            save_data=True,
-                            name=key)
+    make_raw_plots(accel)
+    gyro = StepAnalyzer('BMI120 Gyroscope.csv')
+    make_raw_plots(gyro)
