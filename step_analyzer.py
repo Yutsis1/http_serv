@@ -13,15 +13,25 @@ class StepAnalyzer:
     def __init__(self, csv_data_path: str):
         self.df_data = self.read_data(csv_data_path=csv_data_path)
 
-    def draw_plot(self,
-                  y_data,
-                  x_data=None,
+    def draw_plot(self, y_data, x_data=None,
                   name: str = 'default',
                   x_label: str = 'X',
                   y_label: str = 'Y',
                   enable_grid=False,
                   save_data: bool = False,
                   *args):
+        """
+        Method for draw plot and safe it as png picture if it needs
+        :param y_data: data for the Y-axis
+        :param x_data: data for X-axis (if none set a sequence from 0 to number of items in y_data)
+        :param name: name for a picture
+        :param x_label: name for X-axis
+        :param y_label: name for Y-axis
+        :param enable_grid: enable grid if it needs
+        :param save_data: flag for save picture to ./pictures
+        :param args: addition args for plt
+        :return:
+        """
         y_data = np.array(y_data)
         y_data.astype(np.float64)
         x_data = x_data or np.arange(0.0, len(y_data))
