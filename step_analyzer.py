@@ -3,8 +3,9 @@ import os
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from filterpy.common import Saver
 from scipy.integrate import trapezoid
-from pykalman import AdditiveUnscentedKalmanFilter, KalmanFilter
+from filterpy.kalman import ExtendedKalmanFilter, KalmanFilter
 
 
 class StepAnalyzer:
@@ -18,22 +19,79 @@ class StepAnalyzer:
             list_t.append(float(elem + list_t[i - 1] if i > 0 else 0))
         self.df_data_raw['t'] = list_t
 
-    def set_kalman(self):
+        #     set kalman filters
+        self.kfX = self.set_ext_kalman(P=np.var(self.df_data_raw['rawX']))
+        self.kfY = self.set_ext_kalman(P=np.var(self.df_data_raw['rawY']))
+        self.kfZ = self.set_ext_kalman(P=np.var(self.df_data_raw['rawZ']))
+
+        #     savers classes
+        self.saverX = Saver(self.kfX)
+        self.saverY = Saver(self.kfY)
+        self.saverZ = Saver(self.kfZ)
+
+        #       pints
+        self.pointsX = self.kfX.batch_filter(zs=self.df_data_raw['rawX'], saver=self.saverX)
+        self.pointsY = self.kfX.batch_filter(zs=self.df_data_raw['rawX'], saver=self.saverY)
+        self.pointsZ = self.kfX.batch_filter(zs=self.df_data_raw['rawX'], saver=self.saverZ)
+
+    #
+    def kalman_iter(self, kf):
         pass
 
-    def set_ext_kalman(self):
-        pass
+    @staticmethod
+    def set_ext_kalman(R=1, P=1, dt=0.02):
+        # set as 3*1 matrix due to we measure ddx
+        kf = KalmanFilter(dim_x=3, dim_z=1)
+        kf.x = np.zeros(3)
+        kf.P[0, 0] = P
+        kf.P[1, 1] = 1
+        kf.P[2, 2] = 1
+        kf.R *= R ** 2
+        # kf.Q = Q_discrete_white_noise(3, dt, Q)
+        kf.F = np.array([[1., dt, .5 * dt * dt],
+                         [0., 1., dt],
+                         [0., 0., 1.]])
+        kf.H = np.array([[1., 0., 0.]])
+
+        return kf
+
+    @staticmethod
+    def HJacobian_at(x):
+        """ compute Jacobian of H matrix at x """
+
+        horiz_dist = x[0]
+        altitude = x[2]
+        from math import sqrt
+        denom = sqrt(horiz_dist ** 2 + altitude ** 2)
+        return np.array([[horiz_dist / denom, 0., altitude / denom]])
+
+    @staticmethod
+    def hx(x):
+        """ compute measurement for slant range that
+        would correspond to state x.
+        """
+        return (x[0] ** 2 + x[2] ** 2) ** 0.5
 
     def calculate_vel_sum(self, series):
         for i, elem in enumerate(series):
-            yield elem*self.df_data_raw['dt'][i]
+            yield series[i - 1] + elem * self.df_data_raw['dt'][i]
 
     def calculate_vel_trapz(self, series):
+        """
+        Method which integrate data and multiply on dt for
+        :param series:
+        :return:
+        """
         integrated_data = self.integration_data_trapz(series)
         for i, data in enumerate(integrated_data):
-            yield data*self.df_data_raw['dt'][i]
+            yield data * self.df_data_raw['dt'][i]
 
     def calculate_dt(self, series_time=None):
+        """
+        Method for calculation dt for between measurements
+        :param series_time:
+        :return:
+        """
         series_time = series_time or self.df_data_raw['time']
         # first dt is equal as 0 due to it start of measurement
         list_dt = [0]
@@ -41,7 +99,8 @@ class StepAnalyzer:
             # chose only seconds
             #  dt = prev_time - current_time
             dt = float(series_time[i][-6:]) - float(series_time[i - 1][-6:])
-            assert dt >= 0, "series is not sorted element {}={} more than element{}={}".format(
+            # assertion for prevent time travels
+            assert dt >= 0, "series is not sorted element[{}]={} more than element[{}]={}".format(
                 i - 1, float(series_time[i - 1][-6:]),
                 i, float(series_time[i][-6:]))
             list_dt.append(dt)
@@ -118,6 +177,8 @@ class StepAnalyzer:
     def integration_data_trapz(data):
         """
         Generator based on trapezoid integration method
+        For using this method (b-a) = 1 every time
+        If require define (b-a) simplest way to multiply current value on (b-a)
         :param data: sequence for integration
         :return:
         """
@@ -188,8 +249,8 @@ if __name__ == '__main__':
     # print([x for x in accel.calculate_vel(accel.df_data_raw['rawX'])])
     # accel.draw_plot(y_data=[x for x in accel.calculate_vel_trapz(accel.df_data_raw['rawZ'])],
     #                 x_data=accel.df_data_raw['t'])
-    accel.draw_plot(y_data=[x for x in accel.calculate_vel_sum(accel.df_data_raw['rawY'])],
-                    x_data=accel.df_data_raw['t'])
+    # accel.draw_plot(y_data=[x for x in accel.calculate_vel_sum(accel.df_data_raw['rawY'])],
+    #                 x_data=accel.df_data_raw['t'])
     # gyro.draw_plot(y_data=[x for x in gyro.calculate_vel(gyro.df_data_raw['rawY'])],
     #                 x_data=gyro.df_data_raw['t'])
     # velocity_accel = make_raw_velocit(accel, make_plot=True)
