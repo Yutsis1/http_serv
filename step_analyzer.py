@@ -12,6 +12,7 @@ class StepAnalyzer:
 
     def __init__(self, csv_data_path: str):
         self.df_data_raw = self.read_data(csv_data_path=csv_data_path)
+        self.pos_keys = list(self.df_data_raw.keys())[:-1]
         self.data_name = csv_data_path.split('.')[0]
         self.df_data_raw['dt'] = self.calculate_dt()
         list_t = []
@@ -20,9 +21,9 @@ class StepAnalyzer:
         self.df_data_raw['t'] = list_t
 
         #     set kalman filters
-        self.kfX = self.set_ext_kalman(P=np.var(self.df_data_raw['rawX']))
-        self.kfY = self.set_ext_kalman(P=np.var(self.df_data_raw['rawY']))
-        self.kfZ = self.set_ext_kalman(P=np.var(self.df_data_raw['rawZ']))
+        self.kfX = self.set_kalman_filter(P=np.var(self.df_data_raw['rawX']))
+        self.kfY = self.set_kalman_filter(P=np.var(self.df_data_raw['rawY']))
+        self.kfZ = self.set_kalman_filter(P=np.var(self.df_data_raw['rawZ']))
 
         #     savers classes
         self.saverX = Saver(self.kfX)
@@ -30,16 +31,20 @@ class StepAnalyzer:
         self.saverZ = Saver(self.kfZ)
 
         #       pints
-        self.pointsX = self.kfX.batch_filter(zs=self.df_data_raw['rawX'], saver=self.saverX)
-        self.pointsY = self.kfX.batch_filter(zs=self.df_data_raw['rawX'], saver=self.saverY)
-        self.pointsZ = self.kfX.batch_filter(zs=self.df_data_raw['rawX'], saver=self.saverZ)
+        self.kfX.batch_filter(zs=self.df_data_raw['rawX'], saver=self.saverX)
+        self.kfY.batch_filter(zs=self.df_data_raw['rawY'], saver=self.saverY)
+        self.kfZ.batch_filter(zs=self.df_data_raw['rawZ'], saver=self.saverZ)
 
-    #
-    def kalman_iter(self, kf):
-        pass
+        for data, axis in zip([self.saverX, self.saverY, self.saverZ],
+                              ['X', 'Y', 'Z']):
+            df = pd.DataFrame(np.array(data.x))
+            df.columns = [x + axis for x in ['kf_', 'kf_v_', 'kf_p_']]
+            self.pos_keys.extend(df.columns)
+            self.df_data_raw = self.df_data_raw.join(df)
+
 
     @staticmethod
-    def set_ext_kalman(R=1, P=1, dt=0.02):
+    def set_kalman_filter(R=1, P=1, dt=0.02):
         # set as 3*1 matrix due to we measure ddx
         kf = KalmanFilter(dim_x=3, dim_z=1)
         kf.x = np.zeros(3)
@@ -54,23 +59,30 @@ class StepAnalyzer:
         kf.H = np.array([[1., 0., 0.]])
 
         return kf
+    @staticmethod
+    def set_ext_kalman_filter(R=1, P=1, dt=0.02):
+        ekf = ExtendedKalmanFilter(dim_x=3, dim_z=1)
+        ekf.x = np.zeros(3)
+        ekf.P[0, 0] = P
+        ekf.P[1, 1] = 1
+        ekf.P[2, 2] = 1
+        ekf.R *= R ** 2
+        ekf.F = np.array([[1., dt, .5 * dt * dt],
+                         [0., 1., dt],
+                         [0., 0., 1.]])
+        ekf.H = np.array([[1., 0., 0.]])
+
 
     @staticmethod
-    def HJacobian_at(x):
+    def HJacobian_at(x, dt):
         """ compute Jacobian of H matrix at x """
-
-        horiz_dist = x[0]
-        altitude = x[2]
-        from math import sqrt
-        denom = sqrt(horiz_dist ** 2 + altitude ** 2)
-        return np.array([[horiz_dist / denom, 0., altitude / denom]])
+        return [x[0], x[0]*dt, x[0]*dt+0.5*x[0]*(dt**2)]
 
     @staticmethod
     def hx(x):
-        """ compute measurement for slant range that
-        would correspond to state x.
         """
-        return (x[0] ** 2 + x[2] ** 2) ** 0.5
+        """
+        return x[0]
 
     def calculate_vel_sum(self, series):
         for i, elem in enumerate(series):
@@ -112,6 +124,7 @@ class StepAnalyzer:
                   y_label: str = 'Y',
                   enable_grid=False,
                   save_data: bool = False,
+                  show: bool = False,
                   *args):
         """
         Method for draw plot and safe it as png picture if it needs
@@ -128,7 +141,7 @@ class StepAnalyzer:
         plt.close()
         y_data = np.array(y_data)
         y_data.astype(np.float64)
-        x_data = x_data if x_data.any() else np.arange(0.0, len(y_data))
+        x_data = x_data if not (x_data is None) else np.arange(0.0, len(y_data))
         # set XY labels
         plt.xlabel(x_label)
         plt.ylabel(y_label)
@@ -138,7 +151,8 @@ class StepAnalyzer:
         plt.title(name)
         if save_data:
             self.save_plot_to_format(name=name)
-        plt.show()
+        if show:
+            plt.show()
 
     def print_data(self, key_for_print):
         """
@@ -214,54 +228,65 @@ class StepAnalyzer:
 
 if __name__ == '__main__':
 
-    def make_raw_plots(step_analyzer: StepAnalyzer):
-        for key in step_analyzer.df_data_raw.keys():
-            if not key == 'time':
-                step_analyzer.draw_plot(y_data=step_analyzer.df_data_raw[key],
-                                        save_data=True,
-                                        name=key + ' ' + step_analyzer.data_name,
-                                        y_label='Y',
-
-                                        x_label='X')
+    def make_raw_plots(step_analyzer: StepAnalyzer,  **kwargs):
+        for key in step_analyzer.pos_keys:
+            step_analyzer.draw_plot(y_data=step_analyzer.df_data_raw[key],
+                                    save_data=True,
+                                    name=key + ' ' + step_analyzer.data_name,
+                                    y_label='Y',
+                                    x_label='X',  **kwargs)
 
 
     def make_raw_velocit(step_analyzer: StepAnalyzer,
-                         make_plot=True, save_data=True):
+                         make_plot=True, save_data=True,  **kwargs):
         dict_data_for_plot = {}
-        for key in step_analyzer.df_data_raw.keys():
-            if not key == 'time':
-                integrator = step_analyzer.integration_data_trapz(step_analyzer.df_data_raw[key].to_numpy(dtype=float))
-                data_for_plot = [x for x in integrator]
-                if make_plot:
-                    step_analyzer.draw_plot(y_data=data_for_plot,
-                                            save_data=save_data,
-                                            name='integrated velocity' + key[-1] + ' ' + step_analyzer.data_name,
-                                            y_label='Y',
-                                            x_label='X')
-                dict_data_for_plot[key] = data_for_plot
+        for key in step_analyzer.pos_keys:
+            integrator = step_analyzer.integration_data_trapz(step_analyzer.df_data_raw[key].to_numpy(dtype=float))
+            data_for_plot = [x*y for x,y in zip(integrator, step_analyzer.df_data_raw['dt'])]
+            if make_plot:
+                step_analyzer.draw_plot(y_data=data_for_plot,
+                                        save_data=save_data,
+                                        name='integrated velocity' + key[-1] + ' ' + step_analyzer.data_name,
+                                        y_label='Y',
+                                        x_label='X',  **kwargs)
+            dict_data_for_plot[key] = data_for_plot
         return dict_data_for_plot
 
+
+    def make_raw_position(step_analyzer: StepAnalyzer,
+                          make_plot=True, save_data=True, **kwargs):
+        dict_data_for_plot = {}
+        for key in step_analyzer.pos_keys:
+            integrator = step_analyzer.integration_data_trapz(step_analyzer.df_data_raw[key].to_numpy(dtype=float))
+            integrator = step_analyzer.integration_data_trapz(integrator)
+            data_for_plot = [x for x in integrator]
+
+            if make_plot:
+                step_analyzer.draw_plot(y_data=data_for_plot,
+                                        save_data=save_data,
+                                        name='integrated position' + key[-1] + ' ' + step_analyzer.data_name,
+                                        y_label='Y',
+                                        x_label='X',
+                                        **kwargs
+                                        )
+            dict_data_for_plot[key] = data_for_plot
+        return dict_data_for_plot
+
+
+    # def make
 
     #
     accel = StepAnalyzer('BMI120 Accelerometer.csv')
     gyro = StepAnalyzer('BMI120 Gyroscope.csv')
-
-    # print([x for x in accel.calculate_vel(accel.df_data_raw['rawX'])])
-    # accel.draw_plot(y_data=[x for x in accel.calculate_vel_trapz(accel.df_data_raw['rawZ'])],
-    #                 x_data=accel.df_data_raw['t'])
-    # accel.draw_plot(y_data=[x for x in accel.calculate_vel_sum(accel.df_data_raw['rawY'])],
-    #                 x_data=accel.df_data_raw['t'])
-    # gyro.draw_plot(y_data=[x for x in gyro.calculate_vel(gyro.df_data_raw['rawY'])],
-    #                 x_data=gyro.df_data_raw['t'])
-    # velocity_accel = make_raw_velocit(accel, make_plot=True)
-    # integrator_way = accel.integration_data_trapz(velocity_accel)
-    # # accel.draw_plot(y_data=accel,
-    # #                 save_data=True,
-    # #                 name='integrated velocity' + key[-1] + ' ' + step_analyzer.data_name,
-    # #                 y_label='Y',
-    # #                 x_label='X')
-    # make_raw_plots(accel)
     #
-    # velocity_gyro = make_raw_velocit(gyro, make_plot=True)
-    # make_raw_plots(gyro)
+    for data in [accel, gyro]:
+        print(data.pos_keys[:-1])
+        make_raw_plots(step_analyzer=data, )
+        make_raw_velocit(step_analyzer=data)
+        make_raw_position(step_analyzer=data)
+    # array_x = np.array(accel.saverX.x)
+    # df = pd.DataFrame(array_x)
+    # df.columns = ['filteredX', 'vel_fX', 'pos_fX']
+    # df['rawX'] = accel.df_data_raw['rawX']
+    print(accel.df_data_raw)
     print("end")
