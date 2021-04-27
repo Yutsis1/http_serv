@@ -272,10 +272,6 @@ if __name__ == '__main__':
             dict_data_for_plot[key] = data_for_plot
         return dict_data_for_plot
 
-
-    # def make
-
-    #
     accel = StepAnalyzer('BMI120 Accelerometer.csv')
     gyro = StepAnalyzer('BMI120 Gyroscope.csv')
     #
@@ -284,9 +280,4 @@ if __name__ == '__main__':
         make_raw_plots(step_analyzer=data, )
         make_raw_velocit(step_analyzer=data)
         make_raw_position(step_analyzer=data)
-    # array_x = np.array(accel.saverX.x)
-    # df = pd.DataFrame(array_x)
-    # df.columns = ['filteredX', 'vel_fX', 'pos_fX']
-    # df['rawX'] = accel.df_data_raw['rawX']
-    print(accel.df_data_raw)
     print("end")
