@@ -33,16 +33,18 @@ class S(BaseHTTPRequestHandler):
         logging.info("POST request,\nPath: %s\nHeaders:\n%s\n\nBody:\n%s\n",
                      str(self.path), str(self.headers), post_data.decode('utf-8'))
         json_post = json.loads(post_data)  # type: dict
-        for key, value in json_post.items():
-            with open("{}.csv".format(key), "a+", newline="") as outfile:
-                writer = csv.DictWriter(outfile,
-                                        fieldnames=list(value.keys()),
-                                        delimiter=',',
-                                        quotechar='|',
-                                        quoting=csv.QUOTE_MINIMAL
-                                        )
-                # writer.writeheader()
-                writer.writerow(value)
+        # for key, value in json_post.items():
+        with open("Data_1.csv".format(
+
+        ), "a+", newline="") as outfile:
+            writer = csv.DictWriter(outfile,
+                                    fieldnames=list(json_post.keys()),
+                                    delimiter=',',
+                                    quotechar='|',
+                                    quoting=csv.QUOTE_MINIMAL
+                                    )
+            # writer.writeheader()
+            writer.writerow(json_post)
 
         self._set_response()
         if self._use_text:
@@ -67,11 +69,4 @@ def run(server_class=HTTPServer, handler_class=S, port=8081, address='127.0.0.1'
 
 
 if __name__ == '__main__':
-    # from sys import argv
-    #
-    # if len(argv) == 2:
-    #     run(port=int(argv[1]), address='192.168.50.200')
-    # else:
-    #     run()
     run(address='192.168.50.200')
-    # run()

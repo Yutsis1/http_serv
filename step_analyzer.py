@@ -42,7 +42,6 @@ class StepAnalyzer:
             self.pos_keys.extend(df.columns)
             self.df_data_raw = self.df_data_raw.join(df)
 
-
     @staticmethod
     def set_kalman_filter(R=1, P=1, dt=0.02):
         # set as 3*1 matrix due to we measure ddx
@@ -59,6 +58,7 @@ class StepAnalyzer:
         kf.H = np.array([[1., 0., 0.]])
 
         return kf
+
     @staticmethod
     def set_ext_kalman_filter(R=1, P=1, dt=0.02):
         ekf = ExtendedKalmanFilter(dim_x=3, dim_z=1)
@@ -68,15 +68,14 @@ class StepAnalyzer:
         ekf.P[2, 2] = 1
         ekf.R *= R ** 2
         ekf.F = np.array([[1., dt, .5 * dt * dt],
-                         [0., 1., dt],
-                         [0., 0., 1.]])
+                          [0., 1., dt],
+                          [0., 0., 1.]])
         ekf.H = np.array([[1., 0., 0.]])
-
 
     @staticmethod
     def HJacobian_at(x, dt):
         """ compute Jacobian of H matrix at x """
-        return [x[0], x[0]*dt, x[0]*dt+0.5*x[0]*(dt**2)]
+        return [x[0], x[0] * dt, x[0] * dt + 0.5 * x[0] * (dt ** 2)]
 
     @staticmethod
     def hx(x):
@@ -123,8 +122,10 @@ class StepAnalyzer:
                   x_label: str = 'X',
                   y_label: str = 'Y',
                   enable_grid=False,
-                  save_data: bool = False,
+                  save_data: bool = True,
                   show: bool = False,
+                  path: str = './pictures/',
+                  fmt: str = 'png',
                   *args):
         """
         Method for draw plot and safe it as png picture if it needs
@@ -150,7 +151,10 @@ class StepAnalyzer:
         plt.plot(x_data, y_data, args)
         plt.title(name)
         if save_data:
-            self.save_plot_to_format(name=name)
+            pwd = os.getcwd()
+            os.chdir(path)
+            plt.savefig("{}.{}".format(name, fmt))
+            os.chdir(pwd)
         if show:
             plt.show()
 
@@ -228,27 +232,27 @@ class StepAnalyzer:
 
 if __name__ == '__main__':
 
-    def make_raw_plots(step_analyzer: StepAnalyzer,  **kwargs):
+    def make_raw_plots(step_analyzer: StepAnalyzer, **kwargs):
         for key in step_analyzer.pos_keys:
             step_analyzer.draw_plot(y_data=step_analyzer.df_data_raw[key],
                                     save_data=True,
                                     name=key + ' ' + step_analyzer.data_name,
                                     y_label='Y',
-                                    x_label='X',  **kwargs)
+                                    x_label='X', **kwargs)
 
 
     def make_raw_velocit(step_analyzer: StepAnalyzer,
-                         make_plot=True, save_data=True,  **kwargs):
+                         make_plot=True, save_data=True, **kwargs):
         dict_data_for_plot = {}
         for key in step_analyzer.pos_keys:
             integrator = step_analyzer.integration_data_trapz(step_analyzer.df_data_raw[key].to_numpy(dtype=float))
-            data_for_plot = [x*y for x,y in zip(integrator, step_analyzer.df_data_raw['dt'])]
+            data_for_plot = [x * y for x, y in zip(integrator, step_analyzer.df_data_raw['dt'])]
             if make_plot:
                 step_analyzer.draw_plot(y_data=data_for_plot,
                                         save_data=save_data,
                                         name='integrated velocity' + key[-1] + ' ' + step_analyzer.data_name,
                                         y_label='Y',
-                                        x_label='X',  **kwargs)
+                                        x_label='X', **kwargs)
             dict_data_for_plot[key] = data_for_plot
         return dict_data_for_plot
 
@@ -272,12 +276,18 @@ if __name__ == '__main__':
             dict_data_for_plot[key] = data_for_plot
         return dict_data_for_plot
 
+
     accel = StepAnalyzer('BMI120 Accelerometer.csv')
     gyro = StepAnalyzer('BMI120 Gyroscope.csv')
     #
     for data in [accel, gyro]:
-        print(data.pos_keys[:-1])
-        make_raw_plots(step_analyzer=data, )
-        make_raw_velocit(step_analyzer=data)
-        make_raw_position(step_analyzer=data)
+        y_data = [0.0]
+        for i, x in enumerate(data.df_data_raw['dt']):
+            y_data.append(y_data[i] + float(x))
+        y_data.pop(0)
+        print(y_data)
+        make_raw_plots(step_analyzer=data, x_data=y_data)
+        make_raw_velocit(step_analyzer=data, x_data=y_data)
+        make_raw_position(step_analyzer=data, x_data=y_data)
+    print(type(accel.df_data_raw))
     print("end")
