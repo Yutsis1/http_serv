@@ -121,7 +121,7 @@ class StepAnalyzer:
                   name: str = 'default',
                   x_label: str = 'X',
                   y_label: str = 'Y',
-                  enable_grid=False,
+                  enable_grid: bool = True,
                   save_data: bool = True,
                   show: bool = False,
                   path: str = './pictures/',
