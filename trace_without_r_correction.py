@@ -150,29 +150,6 @@ class Trace(PDR):
 
     def set_whole_ukf(self):
         def fx(x, dt):
-            Rp = R.from_rotvec(np.array([x[10], x[12], x[14]]))  # type: R
-
-            # x_a = Rm.as_matrix() @ np.array([x[0], x[3], x[6]], dtype=float)
-            # x_v = Rm.as_matrix() @ np.array([x[1], x[4], x[7]], dtype=float)
-            # x_s = Rm.as_matrix() @ np.array([x[2], x[5], x[8]], dtype=float)
-            # x_w = Rm.as_matrix() @ np.array([x[9], x[11], x[13]], dtype=float)
-            # x_r = Rm.as_matrix() @ np.array([x[10], x[12], x[14]], dtype=float)
-            # x[0], x[3], x[6] = x_a[0], x_a[1], x_a[2]
-            # x[1], x[4], x[7] = x_v[0], x_v[1], x_v[2]
-            # x[2], x[5], x[8] = x_s[0], x_s[1], x_s[2]
-            # x[9], x[11], x[13] = x_w[0], x_w[1], x_w[2]
-            # x[10], x[12], x[14] = x_r[0], x_r[1], x_r[2]
-            def skew_matrix_from_vector(vector):
-                return np.array([[0, -vector[2], vector[1]],
-                                 [vector[2], 0, -vector[0]],
-                                 [-vector[1], vector[0], 0]])
-
-            I = np.eye(3, 3)
-            vector_w = np.array([x[9], x[11], x[13]])
-            skew_matrix_from_vectro_w = skew_matrix_from_vector(vector_w)
-            Rn = Rp * ((2 * I + skew_matrix_from_vectro_w * dt) / (2 * I - skew_matrix_from_vectro_w * dt))
-
-            Sa = skew_matrix_from_vector(np.array([x[0], x[3], x[6]], dtype=float))
 
             X_a = np.array([[1, dt, 0.5 * dt ** 2],
                             [0, 1, dt],
