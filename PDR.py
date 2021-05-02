@@ -1,19 +1,18 @@
-import math
 import os
+from typing import List, Dict, Tuple, Union, Any
 
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
-from pandas import DataFrame
-from scipy.stats import norm
+from pandas import DataFrame, Series
 
 
 class PDR(object):
     def __init__(self, csv_path: str):
-        self.df_raw = pd.read_csv(csv_path) # type: DataFrame
+        self.df_raw = pd.read_csv(csv_path)  # type: DataFrame
         self.df_raw = self.df_raw.sort_values(by=['time'])
         self.df_raw = self.df_raw.reset_index(drop=True)
-        self.df = pd.DataFrame(columns=self.df_raw.columns) # type: DataFrame
+        self.df = pd.DataFrame(columns=self.df_raw.columns)  # type: DataFrame
         rotation_raw_w = self.df_raw.iloc[0]['rotation_rawW']
         for index, row in self.df_raw.iterrows():
 
@@ -29,11 +28,17 @@ class PDR(object):
         # self.df_data = self.df_data.drop_duplicates()
         # print(self.df_data.join(self.df))
         self.df = self.df.reset_index(drop=True)
-        self.df['dt'] = self.calculate_dt()
+        self.df['dt'] = self.calculate_dt(self.df['time'])
+        self.df_raw['dt'] = self.calculate_dt(series_time=self.df_raw['time'])
+
         list_t = []
         for i, elem in enumerate(self.df['dt']):
             list_t.append(float(elem + list_t[i - 1] if i > 0 else 0.0))
         self.df['t'] = list_t
+        list_t = []
+        for i, elem in enumerate(self.df_raw['dt']):
+            list_t.append(float(elem + list_t[i - 1] if i > 0 else 0.0))
+        self.df_raw['t'] = list_t
         self.g = 9.8
 
     def coordinate_conversion(self):
@@ -61,13 +66,13 @@ class PDR(object):
 
         return a_vertical
 
-    def calculate_dt(self, series_time=None):
+    def calculate_dt(self, series_time: Series):
         """
         Method for calculation dt for between measurements
         :param series_time:
         :return:
         """
-        series_time = series_time or self.df['time'].values
+        series_time = series_time.values
         # first dt is equal as 0 due to it start of measurement
         list_dt = [0.0]
         for i in range(1, len(series_time)):
@@ -150,72 +155,24 @@ class PDR(object):
         if show:
             plt.show()
 
-    def step_counter(self,
-                     # frequency=100,
-                     ):
-        # offset = frequency / 100
-        # g = 9.794
-        a_vertical = self.coordinate_conversion()
-        # slide = frequency * offset  # Sliding window(sample data at 100Hz）
-        # frequency = 100 * offset
-        # Pedestrian acceleration threshold
-        # min_acceleration = 0.2 # * g  # 0.2g
-        # max_acceleration = 1 # * g  # 2g
-        # Peak interval (s)
-        # min_interval = 0.4
-        # min_interval = 0.001 if walk_type == 'normal' else 3  # 'abnormal
-        # max_interval = 1
+    def step_counter(self) -> Tuple[DataFrame, DataFrame]:
+        # a_vertical = self.coordinate_conversion()
+        a_vertical = self.df['accel_rawZ']
         # Calculate the number of steps
-        steps = []
-        peak = {'index': 0, 'acceleration': 0}
+        df_steps_up = DataFrame()
+        df_steps_down = DataFrame()
 
         # Detect peak with 40 * offset as sliding window
         # Condition 1: The peak is between 0.2 g~2g
         for i, v in enumerate(a_vertical):
-            if i>0:
-                if v > a_vertical[i-1]:
-                    peak['index'] = i-1
-                    peak['acceleration'] = a_vertical[i-1]
-                    steps.append(peak)
-        #     if v > max_acceleration:
-        #         peak['acceleration'] = v
-        #         peak['index'] = i
-        #         steps.append(peak)
-        #         peak = {'index': 0, 'acceleration': 0}
+            if i == 0 or i == len(a_vertical) - 1:
+                continue
+            if v > a_vertical[i - 1] and v > a_vertical[i+1]:
+                df_steps_up = df_steps_up.append(self.df.iloc[i])
+            if v < a_vertical[i - 1] and v < a_vertical[i+1]:
+                df_steps_down = df_steps_down.append(self.df.iloc[i])
 
-            # if peak['acceleration'] <= v <= max_acceleration and v >= min_acceleration:
-            #     peak['acceleration'] = v
-            #     peak['index'] = i
-            # # if i % slide == 0 and peak['index'] != 0:
-            # elif v > 2.2:
-            #     steps.append(peak)
-            #     peak = {'index': 0, 'acceleration': 0}
-
-        # Condition 2:The interval before the two peaks is at least greater than 0.4 s * offset
-        # When del is used, the principle of first record and then delete is generally adopted
-        # if len(steps) > 0:
-        #     last_step = steps[0]
-        #     dirty_points = []
-        #     for key, step_dict in enumerate(steps):
-        #         # print(step_dict['index'])
-        #         if key == 0:
-        #             continue
-        #         if step_dict['index'] - last_step['index'] < min_interval * frequency:
-        #             # print('last:', lastStep['index'], 'this:', step_dict['index'])
-        #             if step_dict['acceleration'] <= last_step['acceleration']:
-        #                 dirty_points.append(key)
-        #             else:
-        #                 last_step = step_dict
-        #                 dirty_points.append(key - 1)
-        #         else:
-        #             last_step = step_dict
-        #
-        #     counter = 0  # The number of record deletions, as a deviation value
-        #     for key in dirty_points:
-        #         del steps[key - counter]
-        #         counter = counter + 1
-
-        return steps
+        return df_steps_up, df_steps_down
 
         # Step size estimation
         # The current method is not scientific,temporary use
