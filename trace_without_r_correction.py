@@ -29,8 +29,8 @@ class Trace(PDR):
         self.set_ukf()
 
         # self.df_gyro, self.df_acc = self.filtered_data_separate()
-        self.set_whole_ukf()
-        self.set_pdr_ukf()
+        # self.set_whole_ukf()
+        # self.set_pdr_ukf()
         # self.set_whole_ekf()
 
     def update_rotation_matrix_raw(self, vector, dt):

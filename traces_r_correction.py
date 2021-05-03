@@ -14,10 +14,11 @@ class Trace_r(Trace):
                  v0=np.array([0.0, 0.0, 0.0]),
                  a0=np.array([0.0, 0.0, 0.0]),
                  s0=np.array([0.0, 0.0, 0.0])):
-        super(Trace_r, self).__init__(csv_path, v0=np.array([0.0, 0.0, 0.0]),
-                                      a0=np.array([0.0, 0.0, 0.0]),
-                                      s0=np.array([0.0, 0.0, 0.0]))
-        # np.seterr(divide='ignore', invalid='ignore')
+        super(Trace_r, self).__init__(csv_path, v0=v0,
+                                      a0=a0,
+                                      s0=s0)
+        self.set_pdr_ukf()
+
 
     # Override
     def set_whole_ukf(self):
@@ -45,7 +46,7 @@ class Trace_r(Trace):
             skew_matrix_from_vector_w = skew_matrix_from_vector(vector_w)
             Rn = Rp * ((2 * I + skew_matrix_from_vector_w * dt) * inv(2 * I - skew_matrix_from_vector_w * dt))
 
-            Sa = skew_matrix_from_vector(np.array([x[12], x[13], x[14]], dtype=float))
+            Sa = -skew_matrix_from_vector(np.array([x[12], x[13], x[14]], dtype=float))
 
             F = np.eye(15)  # type: np.ndarray
 
@@ -53,7 +54,7 @@ class Trace_r(Trace):
             F[0:3, 3:6] += Rn * dt
             F[9:12, 12:15] += Rn * dt
             # add skew symmetric matrix to help for calculations
-            F[9:12, 0:3] -= Sa * dt
+            F[9:12, 0:3] += Sa * dt
 
             # update velocity
             F[6:9, 9:12] = np.eye(3) * dt
@@ -73,12 +74,15 @@ class Trace_r(Trace):
         #                               alpha=0.1,
         #                               beta=2.,
         #                               kappa=-1))
-        self.ukf_whole.R = np.diag([self.df['accel_rawX'].var(),
-                                    self.df['accel_rawY'].var(),
-                                    self.df['accel_rawZ'].var(),
-                                    self.df['gyro_rawX'].var(),
-                                    self.df['gyro_rawY'].var(),
-                                    self.df['gyro_rawZ'].var()])
+        self.ukf_whole.R = np.diag([
+            self.df['gyro_rawX'].var(),
+            self.df['gyro_rawY'].var(),
+            self.df['gyro_rawZ'].var(),
+            self.df['accel_rawX'].var(),
+            self.df['accel_rawY'].var(),
+            self.df['accel_rawZ'].var(),
+
+        ])
 
     # Override
     def filtered_data_whole(self,
@@ -97,7 +101,6 @@ class Trace_r(Trace):
                 row['gyro_rawX'],
                 row['gyro_rawY'],
                 row['gyro_rawZ'],
-
             ])
             # vector = (self.ukf_whole.x[10],
             #           self.ukf_whole.x[12],
@@ -170,7 +173,7 @@ class Trace_r(Trace):
             # return x[[3, 4, 5, 12, 13, 14]]
             return x[[0, 1, 2, 12, 13, 14]]
 
-        self.ukf_whole = UKF(dim_x=15,
+        self.ukf_pdr = UKF(dim_x=15,
                              dim_z=6,
                              fx=fx,
                              hx=hx,
@@ -180,7 +183,7 @@ class Trace_r(Trace):
         #                               alpha=0.1,
         #                               beta=2.,
         #                               kappa=-1))
-        self.ukf_whole.R = np.diag([
+        self.ukf_pdr.R = np.diag([
             self.df['gyro_rawX'].var(),
             self.df['gyro_rawY'].var(),
             self.df['gyro_rawZ'].var(),
@@ -206,15 +209,15 @@ class Trace_r(Trace):
         t = self.df.iloc[i]['t']
         dt = t - row['t']
         z_array = np.array([
-            row['gyro_rawX'],
-            row['gyro_rawY'],
-            row['gyro_rawZ'],
             row['accel_rawX'],
             row['accel_rawY'],
             row['accel_rawZ'],
+            row['gyro_rawX'],
+            row['gyro_rawY'],
+            row['gyro_rawZ'],
         ])
-        self.ukf_pdr.x[0], self.ukf_pdr.x[3], self.ukf_pdr.x[6], self.ukf_pdr.x[9], \
-        self.ukf_pdr.x[11], self.ukf_pdr.x[13] = z_array
+        self.ukf_pdr.x[12], self.ukf_pdr.x[13], self.ukf_pdr.x[14], self.ukf_pdr.x[0], \
+        self.ukf_pdr.x[1], self.ukf_pdr.x[2] = z_array
         self.ukf_pdr.predict(dt=dt)
         for i, row in df_steps.iterrows():
             self.ukf_whole.predict(dt=row['dt'])
@@ -222,12 +225,12 @@ class Trace_r(Trace):
 
             # update
             z_array = np.array([
-                row['gyro_rawX'],
-                row['gyro_rawY'],
-                row['gyro_rawZ'],
                 row['accel_rawX'],
                 row['accel_rawY'],
                 row['accel_rawZ'],
+                row['gyro_rawX'],
+                row['gyro_rawY'],
+                row['gyro_rawZ'],
             ])
 
             self.ukf_whole.update(z=z_array)
@@ -252,7 +255,9 @@ class Trace_r(Trace):
 
 if __name__ == '__main__':
     trace = Trace_r(csv_path='Data_1.csv')
+    trace.set_whole_ukf()
     df = trace.filtered_data_whole()
+    df_pdr = trace.filtered_pdr_data()
     trace.draw_plot(x_data=df['f_p_X'],
                     y_data=df['f_p_Y'],
                     show=True,
